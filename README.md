@@ -1,8 +1,10 @@
-# Bpfql
+# BPFQL
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/bpfql`. To experiment with that code, run `bin/console` for an interactive prompt.
+eBPF query runner. Choose a format in:
 
-TODO: Delete this and the text above, and describe your gem
+* Ruby DSL
+* YAML
+* SQL-like query language (in the future)
 
 ## Installation
 
@@ -22,7 +24,33 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+```ruby
+BPFQL do
+  select "*"
+  from "tracepoint:random:urandom_read"
+  where "comm", is: "ruby"
+  _and  "pid", is: 12345
+end
+```
+
+```ruby
+BPFQL do
+  select "count()"
+  from "tracepoint:syscalls:sys_clone_enter"
+  group_by "comm"
+  interval "15s"
+end
+```
+
+### YAML format
+
+```yaml
+BPFQL:
+- select: count()
+  from: tracepoint:syscalls:sys_clone_enter
+  group_by: comm
+  stop_after: "30s"
+```
 
 ## Development
 

@@ -3,7 +3,7 @@ require 'yaml'
 module Bpfql
   class Query
     def self.parse_yaml(yaml)
-      data = YAML.parse(yaml)
+      data = YAML.load(yaml)
       data['BPFQL'].map do |query|
         Query.new do |builder|
           builder.select = SelectOption.new(query['select'])
@@ -49,14 +49,19 @@ module Bpfql
       end
 
       def initialize(lhs, op=nil, rhs=nil)
-        unless op
+        if !rhs # args.size < 3
           m = /^([^\s]+)\s+([^\s]+)\s+([^\s]+|"[^"]+"|'[^']+')$/.match(lhs)
           unless m
             raise "Failed to parse where clause: #{lhs}"
           end
-          super(m[1], m[2], m[3])
+          if m2 = /^['"](.+)['"]$/.match(m[3])
+            rhs = m2[1]
+          else
+            rhs = m[3]
+          end
+          super(m[1], m[2].to_sym, rhs)
         else
-          super(lhs, op, rhs)
+          super(lhs, op.to_sym, rhs)
         end
       end
     end

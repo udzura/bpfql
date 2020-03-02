@@ -1,0 +1,23 @@
+PATH
+  remote: .
+  specs:
+    bpfql (0.1.0)
+      rbbcc
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    minitest (5.14.0)
+    rake (12.3.3)
+    rbbcc (0.3.1)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  bpfql!
+  minitest (~> 5.0)
+  rake (~> 12.0)
+
+BUNDLED WITH
+   2.0.2

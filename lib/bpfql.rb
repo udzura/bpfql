@@ -1,6 +1,5 @@
 require "bpfql/version"
+require "bpfql/query"
 
 module Bpfql
-  class Error < StandardError; end
-  # Your code goes here...
 end

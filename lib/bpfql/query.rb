@@ -7,7 +7,7 @@ module Bpfql
       data['BPFQL'].map do |query|
         Query.new do |builder|
           builder.select = SelectOption.new(query['select'])
-          builder.from = query['from']
+          builder.from = ProbeOption.new(query['from'])
           if query['where']
             builder.where = FilterOption.parse(query['where'])
           end
@@ -24,6 +24,7 @@ module Bpfql
       b.call(self)
     end
     attr_accessor :select, :from, :where, :group_by, :interval, :stop
+    alias probe from
 
     class SelectOption < Struct.new(:members, :type)
       def initialize(query)
@@ -37,6 +38,33 @@ module Bpfql
         when Array
           self.members = query
         end
+      end
+    end
+
+    class ProbeOption < Struct.new(:type, :arg1, :arg2)
+      def initialize(probe)
+        # FIXME: complcated probe, e.g. uprobe and USDT has 4 sections
+        super(*probe.split(':'))
+      end
+
+      def tracepoint?
+        self.type == "tracepoint"
+      end
+
+      def kprobe?
+        self.type == "kprobe"
+      end
+
+      def uprobe?
+        self.type == "uprobe"
+      end
+
+      def usdt?
+        self.type == "usdt"
+      end
+
+      def to_s
+        [type, arg1, arg2].join ":"
       end
     end
 

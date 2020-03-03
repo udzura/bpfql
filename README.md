@@ -1,5 +1,7 @@
 # BPFQL
 
+[![Gem Version](https://badge.fury.io/rb/bpfql.svg)](https://badge.fury.io/rb/bpfql)
+
 eBPF query runner. Choose a format in:
 
 * Ruby DSL
@@ -60,6 +62,8 @@ BPFQL:
     - comm is "ruby"
     - pid is 12345
 ```
+
+* See [examples/](examples/) to find working examples.
 
 ## Development
 

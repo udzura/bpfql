@@ -5,20 +5,18 @@ module Bpfql
   class Runner
     def initialize(qobj)
       @query_builder = qobj
+      @fmt = gen_fmt
+      @start_ts = 0
     end
 
     def run
       @module = RbBCC::BCC.new(text: bpf_source)
-      @start_ts = 0
-      print_event = lambda { |cpu, data, size|
+      puts(@fmt.gsub(/(\.\d+f|d)/, 's') % tracepoint_fields_sorted.map(&:upcase))
+
+      @module["events"].open_perf_buffer do |cpu, data, size|
         event = @module["events"].event(data)
-        @start_ts = event.ts if @start_ts == 0
-
-        time_s = ((event.ts - @start_ts).to_f) / 1000000000
-        puts("%-18.9f %-16s %-6d" % [time_s, event.comm, event.pid])
-      }
-
-      @module["events"].open_perf_buffer(&print_event)
+        puts(@fmt % gen_extract_data(event))
+      end
       loop {
         begin
           @module.perf_buffer_poll()
@@ -27,6 +25,36 @@ module Bpfql
         end
       }
       puts "Exiting bpfql..."
+    end
+
+    def gen_fmt
+      fmt = []
+      fmt << '%-18.9f' if tracepoint_fields.include?("ts")
+      fmt << '%-16s' if tracepoint_fields.include?("comm")
+      fmt << '%-6d' if tracepoint_fields.include?("pid")
+      fields_noncommon.each do |f|
+        if field_maps[f] =~ /^char \w+\[\w+\]$/
+          fmt << '%-16s'
+        else
+          fmt << '%-8d'
+        end
+      end
+      fmt.join ' '
+    end
+
+    def gen_extract_data(event)
+      ret = []
+      if tracepoint_fields.include?("ts")
+        @start_ts = event.ts if @start_ts == 0
+        time_s = ((event.ts - @start_ts).to_f) / 1000000000
+        ret << time_s
+      end
+
+      tracepoint_fields_sorted.each do |f|
+        next if f == 'ts'
+        ret << event.send(f)
+      end
+      ret
     end
 
     def bpf_source
@@ -68,10 +96,10 @@ module Bpfql
         src.sub!('__ASSIGN_TS__', tracepoint_fields.include?("ts") ? 'data.ts = bpf_ktime_get_ns();' : '')
         src.sub!('__ASSIGN_COMM__', tracepoint_fields.include?("comm") ? 'bpf_get_current_comm(&data.comm, sizeof(data.comm));' : '')
 
-        if (tracepoint_fields - %w(pid ts comm)).empty?
+        if fields_noncommon.empty?
           src.sub!('__ASSIGN_FIELDS__', '')
         else
-          assigner = (tracepoint_fields - %w(pid ts comm)).map { |field|
+          assigner = fields_noncommon.map { |field|
             "data.#{field} = args->#{field};"
           }.join("\n")
           src.sub!('__ASSIGN_FIELDS__', assigner)
@@ -92,28 +120,41 @@ module Bpfql
                   end
     end
 
+    def tracepoint_fields_sorted
+      [].tap do |a|
+        a << 'ts' if tracepoint_fields.include?("ts")
+        a << 'comm' if tracepoint_fields.include?("comm")
+        a << 'pid' if tracepoint_fields.include?("pid")
+        a.concat fields_noncommon
+      end
+    end
+
+    def fields_noncommon
+      tracepoint_fields - %w(pid ts comm)
+    end
+
     def tracepoint_field_maps_from_format
-      @_fmt ||= begin
-                  fmt = File.read "/sys/kernel/debug/tracing/events/#{qb.probe.arg1}/#{qb.probe.arg2}/format"
-                  dst = {}
-                  fmt.each_line do |l|
-                    next unless l.include?("field:")
-                    next if l.include?("common_")
-                    kv = l.split(";").map{|elm| elm.split(":").map(&:strip)}.reject{|e| e.size != 2 }
-                    kv = Hash[kv]
-                    field_name = kv['field'].split.last
-                    field_type = if kv['field'] =~ /^const char \* #{field_name}$/
-                                   "char #{field_name}[BPFQL_STR_MAX]"
-                                 elsif kv['field'] =~ /^const char \*const \* #{field_name}$/
-                                   warn("not yet fully unsupported field type")
-                                   "char #{field_name}[BPFQL_ARY_MAX][BPFQL_STR_MAX]"
-                                 else
-                                   kv['field']
-                                 end
-                    dst[field_name] = field_type
+      @_tfmap ||= begin
+                    fmt = File.read "/sys/kernel/debug/tracing/events/#{qb.probe.arg1}/#{qb.probe.arg2}/format"
+                    dst = {}
+                    fmt.each_line do |l|
+                      next unless l.include?("field:")
+                      next if l.include?("common_")
+                      kv = l.split(";").map{|elm| elm.split(":").map(&:strip)}.reject{|e| e.size != 2 }
+                      kv = Hash[kv]
+                      field_name = kv['field'].split.last
+                      field_type = if kv['field'] =~ /^const char \* #{field_name}$/
+                                     "char #{field_name}[BPFQL_STR_MAX]"
+                                   elsif kv['field'] =~ /^const char \*const \* #{field_name}$/
+                                     warn("not yet fully unsupported field type")
+                                     "char #{field_name}[BPFQL_ARY_MAX][BPFQL_STR_MAX]"
+                                   else
+                                     kv['field']
+                                   end
+                      dst[field_name] = field_type
+                    end
+                    dst
                   end
-                  dst
-                end
     end
 
     def field_maps

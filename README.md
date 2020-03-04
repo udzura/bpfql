@@ -38,7 +38,7 @@ end
 ```ruby
 BPFQL do
   select "count()"
-  from "tracepoint:syscalls:sys_clone_enter"
+  from "tracepoint:syscalls:sys_enter_clone"
   group_by "comm"
   interval "15s"
 end
@@ -49,7 +49,7 @@ end
 ```yaml
 BPFQL:
 - select: count()
-  from: tracepoint:syscalls:sys_clone_enter
+  from: tracepoint:syscalls:sys_enter_clone
   group_by: comm
   stop_after: "30s"
 ```
@@ -57,7 +57,7 @@ BPFQL:
 ```yaml
 BPFQL:
 - select: count()
-  from: tracepoint:syscalls:sys_clone_enter
+  from: tracepoint:syscalls:sys_enter_clone
   where:
     - comm is "ruby"
     - pid is 12345

@@ -9,11 +9,11 @@ module Bpfql
     attr_reader :builder
 
     def select(*members)
-      builder.select = SelectOption.new(members)
+      builder.select = Query::SelectOption.new(members)
     end
 
     def from(probe)
-      builder.from = ProbeOption.new(probe)
+      builder.from = Query::ProbeOption.new(probe)
     end
 
     def where(*filter, **options)
@@ -39,7 +39,7 @@ module Bpfql
     end
 
     def stop_after(timing)
-      builder.stop = StopOption.new(:after, timing)
+      builder.stop = Query::StopOption.new(:after, timing)
     end
 
     private
@@ -51,11 +51,11 @@ module Bpfql
         end
         %i(is lt gt lteq gteq).each do |ope|
           if options.has_key?(ope)
-            return FilterOption.new(filter[0], ope.to_s, options[ope])
+            return Query::FilterOption.new(filter[0], ope.to_s, options[ope])
           end
         end
       when 3
-        return FilterOption.new(*filter)
+        return Query::FilterOption.new(*filter)
       else
         raise ArgumentError, "Invalid parameter: #{filter}, #{options}"
       end
@@ -64,6 +64,8 @@ module Bpfql
 end
 
 def BPFQL(&b)
-  evaluator = Bpfql::DSL.new(Bpfql::Query.new)
+  query = Bpfql::Query.new
+  evaluator = Bpfql::DSL.new(query)
   evaluator.instance_eval(&b)
+  query
 end

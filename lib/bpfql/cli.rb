@@ -14,8 +14,16 @@ module Bpfql
         exit 1
       end
 
-      yaml_file = argv[0]
-      q = Bpfql::Query.parse_yaml(File.read yaml_file)
+      file = argv[0]
+      q = nil
+      case File.extname(file)
+      when ".rb", ".bpfql"
+        dsl = File.read(file)
+        q = [eval(dsl)]
+      when ".yml", ".yaml"
+        q = Bpfql::Query.parse_yaml(File.read file)
+      end
+
       r = Bpfql::Runner.new(q[0])
       r.run
     end

@@ -21,7 +21,7 @@ module Bpfql
     end
 
     def initialize(&b)
-      b.call(self)
+      b.call(self) if b
     end
     attr_accessor :select, :from, :where, :group_by, :interval, :stop
     alias probe from

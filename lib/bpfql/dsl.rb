@@ -46,10 +46,10 @@ module Bpfql
     def eval_where(*filter, **options)
       case filter.size
       when 1
-        if (options.keys & %i(is lt gt lteq gteq)).empty?
+        if (options.keys & %i(is not lt gt lteq gteq)).empty?
           raise ArgumentError, "Invalid parameter: #{filter}, #{options}"
         end
-        %i(is lt gt lteq gteq).each do |ope|
+        %i(is not lt gt lteq gteq).each do |ope|
           if options.has_key?(ope)
             return Query::FilterOption.new(filter[0], ope.to_s, options[ope])
           end

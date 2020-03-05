@@ -10,6 +10,7 @@ module Bpfql
     end
 
     def run
+      $stderr.puts bpf_source if ENV['BPFQL_DEBUG']
       @module = RbBCC::BCC.new(text: bpf_source)
       puts(@fmt.gsub(/(\.\d+f|d)/, 's') % tracepoint_fields_sorted.map(&:upcase))
 
@@ -83,12 +84,16 @@ module Bpfql
         src = <<~FUNCTION
           TRACEPOINT_PROBE(#{qb.probe.arg1}, #{qb.probe.arg2}) {
             struct data_t data = {};
+
             __ASSIGN_PID__
             __ASSIGN_TS__
             __ASSIGN_COMM__
 
             __ASSIGN_FIELDS__
-            events.perf_submit(args, &data, sizeof(data));
+
+            __FILTER__
+              events.perf_submit(args, &data, sizeof(data));
+            __FILTER_END__
             return 0;
           }
         FUNCTION
@@ -104,10 +109,68 @@ module Bpfql
           }.join("\n")
           src.sub!('__ASSIGN_FIELDS__', assigner)
         end
+
+        if qb.where && !qb.where.empty?
+          src.sub!('__FILTER__', filter_clause)
+          src.sub!('__FILTER_END__', filter_end_clause)
+        else
+          src.sub!('__FILTER__', "")
+          src.sub!('__FILTER_END__', "")
+        end
         src
       else
         raise NotImplementedError, "unsupported probe: #{qb.probe.to_s}"
       end
+    end
+
+    def filter_clause
+      conds = []
+      needle_section = ""
+      qb.where.each do |filter|
+        if filter[0] == "comm" # || field_maps[filter[0]] =~ /^const char \* #{filter[0]}$/
+          ope = case filter[1].to_s
+                when "is"; ""
+                when "not"; "!"
+                else
+                  raise "String comparation supports only == or !=; You put: #{filter}"
+                end
+          filter_string = %Q<"#{filter[2]}">
+          needle_section = <<~NEEDLE
+            bool matched   = true;
+            char needle[] = #{filter_string};
+            char haystack[sizeof(needle)] = {};
+            bpf_probe_read(&haystack, sizeof(haystack), (void*)data.#{filter[0]});
+            for (int i = 0; i < sizeof(needle) - 1; ++i) {
+              if (needle[i] != haystack[i]) {
+                matched = false;
+              }
+            }
+          NEEDLE
+          conds << %Q<#{ope}matched>
+        else
+          lhs = "data.#{filter[0]}"
+          ope = case filter[1].to_s
+                when "is"; "=="
+                when "not"; "!="
+                when "lt"; "<"
+                when "gt"; ">"
+                when "lteq"; "<="
+                when "gteq"; ">="
+                else
+                  raise "[BPFQL BUG] Cannot evaluate ope: #{filter}; This may be a bug"
+                end
+          rhs = filter[2]
+        conds << [lhs, ope, rhs].join(" ")
+        end
+      end
+      return <<~FILTER
+        #{needle_section}
+        if (#{conds.join("&&")}) {
+      FILTER
+    end
+
+    def filter_end_clause
+      return "}"
     end
 
     def tracepoint_fields

@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    bpfql (0.1.0)
+    bpfql (0.2.0)
       rbbcc
 
 GEM

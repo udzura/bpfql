@@ -1,3 +1,4 @@
 BPFQL:
 - select: [pid, ts, comm, got_bits]
   from: tracepoint:random:urandom_read
+  where: "comm is ruby"
